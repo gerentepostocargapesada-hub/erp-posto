@@ -19,6 +19,30 @@ Sistema completo para gestão de operações e estoque de postos de combustível
 
 ## Checkpoints / Versões
 
+### v9.0-supabase-complete (2026-06-17)
+- **Status:** ✅ Migração Completa localStorage → Supabase
+- **Descrição:** Migração definitiva de todos os 8 módulos do FuelOps Pro do localStorage para Supabase PostgreSQL. Persistência via tabela `module_data` (JSONB) com fallback localStorage para modo offline. Build de produção sem erros.
+- **Arquivos criados:**
+  - `src/services/supabasePersistence.ts` — Camada de persistência abstrata com load/save genéricos, upload de arquivos, e migração localStorage→Supabase
+  - `.env` — Variáveis de ambiente (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+- **Tabelas criadas no Supabase:**
+  - `module_data` — Persistência genérica JSONB por módulo/período (substitui localStorage)
+  - `usuarios` — Usuários do sistema
+  - `parametros_sistema` — Dados cadastrais do posto
+  - `arquivos` — Central global de metadados de arquivos
+  - RLS policies permissivas para desenvolvimento (anon access)
+- **Módulos migrados (8):**
+  1. Regulamentacao.tsx → `regulamentacao`
+  2. Manutencao.tsx → `manutencao`
+  3. Financeiro.tsx → `financeiro`
+  4. EstrategiaVendas.tsx → `estrategia`
+  5. AtendimentoCliente.tsx → `atendimento`
+  6. Configuracoes.tsx → `configuracoes` (empresa params)
+  7. TrocaOleoLubrificacao.tsx → `lubrificacao`
+  8. GestaoEquipe.tsx → `ponto`
+- **Padrão de migração:** Cada módulo usa `loadAllModuleData()` no mount (useEffect) e `saveAllModuleData()` no auto-save, com `loaded` flag para evitar sobrescrita no boot. Fallback localStorage mantido para resiliência offline.
+- **Próximos passos:** Habilitar Supabase Auth, restringir RLS policies, configurar Supabase Storage para uploads de arquivo
+
 ### v8.1-supabase-migration (2026-06-16)
 - **Status:** ✅ Infraestrutura de Migração para Supabase
 - **Descrição:** Criação do script SQL completo de migração e do cliente Supabase para conectar o FuelOps Pro ao banco de dados PostgreSQL, substituindo a persistência local (localStorage).

@@ -11,6 +11,7 @@ import {
   Clock,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { loadAllModuleData, saveAllModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -69,6 +70,7 @@ interface PontoData {
 // ═══════════════════════════════════════════════════════════
 
 const STORAGE_KEY = "fuelops_ponto_data";
+const MODULO_NAME = MODULE_NAMES.PONTO;
 const MONTH_LABELS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -506,12 +508,8 @@ function loadFromStorage(): Record<string, PontoData> {
   }
 }
 
-function saveToStorage(data: Record<string, PontoData>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    /* silently fail */
-  }
+function saveToStorage(_data: Record<string, PontoData>): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -751,9 +749,23 @@ export default function GestaoEquipe() {
   const [error, setError] = useState<string | null>(null);
 
   // ── Persistence ──
-  const allDataRef = useRef<Record<string, PontoData>>(loadFromStorage());
+  const allDataRef = useRef<Record<string, PontoData>>({});
+  const [loaded, setLoaded] = useState(false);
+  const [renderKey, setRenderKey] = useState(0);
   const currentKey = makeKey(selectedYear, selectedMonth);
   const currentData = allDataRef.current[currentKey] ?? null;
+
+  // Carregar dados do Supabase ao montar
+  useEffect(() => {
+    loadAllModuleData<PontoData>(MODULO_NAME).then((data) => {
+      allDataRef.current = data;
+      setLoaded(true);
+      setRenderKey((k) => k + 1);
+    }).catch(() => {
+      allDataRef.current = loadFromStorage();
+      setLoaded(true);
+    });
+  }, []);
 
   // Check which months have data
   const monthsWithData = useMemo(() => {
@@ -770,7 +782,7 @@ export default function GestaoEquipe() {
         const { data, month, year } = await parseExcelFile(file);
         const key = makeKey(year, month);
         allDataRef.current[key] = data;
-        saveToStorage(allDataRef.current);
+        saveAllModuleData(MODULO_NAME, allDataRef.current);
         // Navigate to the imported month
         setSelectedMonth(month);
         setSelectedYear(year);
@@ -1110,7 +1122,7 @@ export default function GestaoEquipe() {
               onClick={() => {
                 if (confirm("Remover dados deste período?")) {
                   delete allDataRef.current[currentKey];
-                  saveToStorage(allDataRef.current);
+                  saveAllModuleData(MODULO_NAME, allDataRef.current);
                   // Force re-render
                   setSelectedMonth((p) => p);
                 }

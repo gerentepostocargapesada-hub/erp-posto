@@ -10,6 +10,7 @@ import {
   TrendingUp,
   AlertTriangle,
 } from "lucide-react";
+import { loadAllModuleData, saveAllModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 // ── TYPES ──────────────────────────────────────────────
 interface CaixaRow {
@@ -91,6 +92,7 @@ function getDaysInMonth(year: number, month: number): number {
 
 // ── CONSTANTS ──────────────────────────────────────────
 const STORAGE_KEY = "fuelops_financeiro_data";
+const MODULO_NAME = MODULE_NAMES.FINANCEIRO;
 
 const MONTH_LABELS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -153,12 +155,8 @@ function loadFromStorage(): Record<string, PeriodData> {
   }
 }
 
-function saveToStorage(data: Record<string, PeriodData>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Storage full or unavailable — fail silently
-  }
+function saveToStorage(_data: Record<string, PeriodData>): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 // ── SECTION CARD ───────────────────────────────────────
@@ -255,40 +253,53 @@ export default function Financeiro() {
   const monthSelectorRef = useRef<HTMLDivElement>(null);
 
   // ── Persistence ──
-  const allDataRef = useRef<Record<string, PeriodData>>(loadFromStorage());
+  const allDataRef = useRef<Record<string, PeriodData>>({});
+  const [loaded, setLoaded] = useState(false);
   const currentKey = makeKey(selectedYear, selectedMonth);
 
-  // ── Form State (lazy-init from localStorage) ──
-  const initStored = allDataRef.current[makeKey(2026, 0)];
-
+  // ── Form State (initialized with defaults) ──
   const [caixas, setCaixas] = useState<CaixaRow[]>(
-    initStored?.caixas || CAIXA_DEFAULTS.map((r) => ({ ...r, pendente: "" }))
+    CAIXA_DEFAULTS.map((r) => ({ ...r, pendente: "" }))
   );
   const [notasPrazo, setNotasPrazo] = useState<NotaPrazoRow[]>(
-    initStored?.notasPrazo || NOTAS_DEFAULTS.map((r) => ({ ...r, justificativa: "" }))
+    NOTAS_DEFAULTS.map((r) => ({ ...r, justificativa: "" }))
   );
   const [cheques, setCheques] = useState<ChequeRow[]>(
-    initStored?.cheques || CHEQUES_DEFAULTS.map((r) => ({ ...r, justificativa: "" }))
+    CHEQUES_DEFAULTS.map((r) => ({ ...r, justificativa: "" }))
   );
-  const [descontos, setDescontos] = useState<DescontoRow[]>(
-    initStored?.descontos || []
-  );
+  const [descontos, setDescontos] = useState<DescontoRow[]>([]);
   const [margens, setMargens] = useState<Margens>(
-    initStored?.margens || { custoOperacao: "", margemBrutaLitros: "", margemBruta: "" }
+    { custoOperacao: "", margemBrutaLitros: "", margemBruta: "" }
   );
-  const [despesas, setDespesas] = useState<DespesaRow[]>(
-    initStored?.despesas || []
-  );
-  const [cancelamentosAtual, setCancelamentosAtual] = useState<string>(
-    initStored?.cancelamentosAtual || ""
-  );
+  const [despesas, setDespesas] = useState<DespesaRow[]>([]);
+  const [cancelamentosAtual, setCancelamentosAtual] = useState<string>("");
+
+  // Carregar dados do Supabase ao montar
+  useEffect(() => {
+    loadAllModuleData<PeriodData>(MODULO_NAME).then((data) => {
+      allDataRef.current = data;
+      setLoaded(true);
+      const initStored = data[currentKey] || getDefaultPeriodData();
+      setCaixas(initStored.caixas || CAIXA_DEFAULTS.map((r) => ({ ...r, pendente: "" })));
+      setNotasPrazo(initStored.notasPrazo || NOTAS_DEFAULTS.map((r) => ({ ...r, justificativa: "" })));
+      setCheques(initStored.cheques || CHEQUES_DEFAULTS.map((r) => ({ ...r, justificativa: "" })));
+      setDescontos(initStored.descontos || []);
+      setMargens(initStored.margens || { custoOperacao: "", margemBrutaLitros: "", margemBruta: "" });
+      setDespesas(initStored.despesas || []);
+      setCancelamentosAtual(initStored.cancelamentosAtual || "");
+    }).catch(() => {
+      allDataRef.current = loadFromStorage();
+      setLoaded(true);
+    });
+  }, []);
 
   // ── Auto-save on every data change ──
   useEffect(() => {
+    if (!loaded) return;
     const data: PeriodData = { caixas, notasPrazo, cheques, descontos, despesas, margens, cancelamentosAtual };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
-  }, [caixas, notasPrazo, cheques, descontos, despesas, margens, cancelamentosAtual, currentKey]);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
+  }, [caixas, notasPrazo, cheques, descontos, despesas, margens, cancelamentosAtual, currentKey, loaded]);
 
   // ── Month selector data (dynamic based on selectedYear) ──
   const months = useMemo(() => {
@@ -308,7 +319,7 @@ export default function Financeiro() {
   const snapshotCurrent = useCallback(() => {
     const data: PeriodData = { caixas, notasPrazo, cheques, descontos, despesas, margens, cancelamentosAtual };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
   }, [caixas, notasPrazo, cheques, descontos, despesas, margens, cancelamentosAtual, currentKey]);
 
   // ── Load state for a given period key ──

@@ -31,6 +31,7 @@ import {
   ArrowDownRight,
   Calendar,
 } from "lucide-react";
+import { loadAllModuleData, saveAllModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 /* ══════════════════════════════════════════════════════════
    TYPES
@@ -90,6 +91,7 @@ interface PeriodData {
    ══════════════════════════════════════════════════════════ */
 
 const STORAGE_KEY = "dadosAtendimento";
+const MODULO_NAME = MODULE_NAMES.ATENDIMENTO;
 
 const MONTH_LABELS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -171,12 +173,8 @@ function loadFromStorage(): Record<string, PeriodData> {
   }
 }
 
-function saveToStorage(data: Record<string, PeriodData>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Storage full or unavailable
-  }
+function saveToStorage(_data: Record<string, PeriodData>): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 function classificarNPS(nps: number): { label: string; color: string; semaforo: string } {
@@ -297,24 +295,39 @@ export default function AtendimentoCliente() {
   const monthSelectorRef = useRef<HTMLDivElement>(null);
 
   // ── Persistence ──
-  const allDataRef = useRef<Record<string, PeriodData>>(loadFromStorage());
+  const allDataRef = useRef<Record<string, PeriodData>>({});
+  const [loaded, setLoaded] = useState(false);
   const currentKey = makeKey(selectedYear, selectedMonth);
 
   const storedDefaults = getDefaultPeriodData();
-  const initStored = allDataRef.current[currentKey];
 
-  // ── Form States ──
-  const [google, setGoogle] = useState<GoogleMetrics>(initStored?.google || storedDefaults.google);
-  const [totem, setTotem] = useState<TotemMetrics>(initStored?.totem || storedDefaults.totem);
-  const [npsGoogle, setNpsGoogle] = useState<string>(initStored?.npsGoogle || storedDefaults.npsGoogle);
-  const [reclamacoesPresenciais, setReclamacoesPresenciais] = useState<ReclamacaoPresencial[]>(
-    initStored?.reclamacoesPresenciais || storedDefaults.reclamacoesPresenciais
-  );
-  const [reclamacoesExternas, setReclamacoesExternas] = useState<string>(
-    initStored?.reclamacoesExternas || storedDefaults.reclamacoesExternas
-  );
-  const [sugestoes, setSugestoes] = useState<Sugestao[]>(initStored?.sugestoes || storedDefaults.sugestoes);
-  const [planosAcao, setPlanosAcao] = useState<PlanoAcao[]>(initStored?.planosAcao || storedDefaults.planosAcao);
+  // ── Form States (initialized with defaults) ──
+  const [google, setGoogle] = useState<GoogleMetrics>(storedDefaults.google);
+  const [totem, setTotem] = useState<TotemMetrics>(storedDefaults.totem);
+  const [npsGoogle, setNpsGoogle] = useState<string>(storedDefaults.npsGoogle);
+  const [reclamacoesPresenciais, setReclamacoesPresenciais] = useState<ReclamacaoPresencial[]>(storedDefaults.reclamacoesPresenciais);
+  const [reclamacoesExternas, setReclamacoesExternas] = useState<string>(storedDefaults.reclamacoesExternas);
+  const [sugestoes, setSugestoes] = useState<Sugestao[]>(storedDefaults.sugestoes);
+  const [planosAcao, setPlanosAcao] = useState<PlanoAcao[]>(storedDefaults.planosAcao);
+
+  // Carregar dados do Supabase ao montar
+  useEffect(() => {
+    loadAllModuleData<PeriodData>(MODULO_NAME).then((data) => {
+      allDataRef.current = data;
+      setLoaded(true);
+      const initStored = data[currentKey] || getDefaultPeriodData();
+      setGoogle(initStored.google || storedDefaults.google);
+      setTotem(initStored.totem || storedDefaults.totem);
+      setNpsGoogle(initStored.npsGoogle || storedDefaults.npsGoogle);
+      setReclamacoesPresenciais(initStored.reclamacoesPresenciais || storedDefaults.reclamacoesPresenciais);
+      setReclamacoesExternas(initStored.reclamacoesExternas || storedDefaults.reclamacoesExternas);
+      setSugestoes(initStored.sugestoes || storedDefaults.sugestoes);
+      setPlanosAcao(initStored.planosAcao || storedDefaults.planosAcao);
+    }).catch(() => {
+      allDataRef.current = loadFromStorage();
+      setLoaded(true);
+    });
+  }, []);
 
   // ── Section state ──
   const [_showNovaReclamacao, setShowNovaReclamacao] = useState(false);
@@ -327,6 +340,7 @@ export default function AtendimentoCliente() {
 
   // ── Auto-save ──
   useEffect(() => {
+    if (!loaded) return;
     const data: PeriodData = {
       google,
       totem,
@@ -337,8 +351,8 @@ export default function AtendimentoCliente() {
       planosAcao,
     };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
-  }, [google, totem, npsGoogle, reclamacoesPresenciais, reclamacoesExternas, sugestoes, planosAcao, currentKey]);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
+  }, [google, totem, npsGoogle, reclamacoesPresenciais, reclamacoesExternas, sugestoes, planosAcao, currentKey, loaded]);
 
   // ── Snapshot & Load helpers ──
   const snapshotCurrent = useCallback(() => {
@@ -352,7 +366,7 @@ export default function AtendimentoCliente() {
       planosAcao,
     };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
   }, [google, totem, npsGoogle, reclamacoesPresenciais, reclamacoesExternas, sugestoes, planosAcao, currentKey]);
 
   const loadPeriod = useCallback((key: string) => {

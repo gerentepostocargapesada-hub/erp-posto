@@ -28,6 +28,7 @@ import {
   GitBranch,
 } from "lucide-react";
 import JSZip from "jszip";
+import { loadAllModuleData, saveAllModuleData, uploadFile, MODULE_NAMES } from "../services/supabasePersistence";
 
 /* ══════════════════════════════════════════════════════════
    TYPES
@@ -233,6 +234,7 @@ const CATEGORIAS = [
 ];
 
 const STORAGE_KEY = "dadosRegulamentacao";
+const MODULO_NAME = MODULE_NAMES.REGULAMENTACAO;
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -327,8 +329,8 @@ function carregarDados(): Record<string, Documento[]> {
   return {};
 }
 
-function salvarDados(dados: Record<string, Documento[]>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+function salvarDados(_dados: Record<string, Documento[]>) {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -337,7 +339,8 @@ function salvarDados(dados: Record<string, Documento[]>) {
 
 export default function Regulamentacao() {
   // ── State ────────────────────────────────────────────
-  const [dados, setDados] = useState<Record<string, Documento[]>>(carregarDados);
+  const [dados, setDados] = useState<Record<string, Documento[]>>({});
+  const [loaded, setLoaded] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<string | null>(null);
   const [drawerAberto, setDrawerAberto] = useState<string | null>(null);
   const [modalUpload, setModalUpload] = useState(false);
@@ -361,10 +364,22 @@ export default function Regulamentacao() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  // ── Persistência ─────────────────────────────────────
+  // ── Persistência Supabase ────────────────────────────
   useEffect(() => {
-    salvarDados(dados);
-  }, [dados]);
+    loadAllModuleData<Record<string, Documento[]>>(MODULO_NAME).then((data) => {
+      setDados(data as Record<string, Documento[]>);
+      setLoaded(true);
+    }).catch(() => {
+      setDados(carregarDados());
+      setLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (loaded) {
+      saveAllModuleData(MODULO_NAME, dados);
+    }
+  }, [dados, loaded]);
 
   // Fechar drawer com Escape
   useEffect(() => {

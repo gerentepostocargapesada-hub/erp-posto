@@ -26,6 +26,7 @@ import {
   Clock,
   ArrowRight,
 } from "lucide-react";
+import { loadSimpleData, saveModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 /* ══════════════════════════════════════════════════════════
    TYPES
@@ -65,6 +66,7 @@ interface ArquivoOrfao extends ArquivoSistema {
    ══════════════════════════════════════════════════════════ */
 
 const STORAGE_KEY = "dadosConfiguracoes";
+const MODULO_NAME = MODULE_NAMES.CONFIGURACOES;
 
 const MONTH_LABELS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -110,12 +112,8 @@ function loadFromStorage(): ConfigData {
   }
 }
 
-function saveToStorage(data: ConfigData): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Storage full or unavailable
-  }
+function saveToStorage(_data: ConfigData): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 function formatFileSize(bytes: number): string {
@@ -145,8 +143,21 @@ export default function Configuracoes() {
   const monthSelectorRef = useRef<HTMLDivElement>(null);
 
   /* ── Persistence ── */
-  const [configData, setConfigData] = useState<ConfigData>(() => loadFromStorage());
+  const [configData, setConfigData] = useState<ConfigData>(getDefaultConfigData);
+  const [loaded, setLoaded] = useState(false);
   const currentKey = makeKey(selectedYear, selectedMonth);
+
+  // Carregar dados do Supabase ao montar
+  useEffect(() => {
+    loadSimpleData<ConfigData>(MODULO_NAME, "empresa", getDefaultConfigData()).then((data) => {
+      setConfigData(data);
+      setEmpresa(data.empresa);
+      setLoaded(true);
+    }).catch(() => {
+      setConfigData(loadFromStorage());
+      setLoaded(true);
+    });
+  }, []);
 
   /* ── View State ── */
   const [activeView, setActiveView] = useState<"menu" | "parametros" | "arquivos">("menu");
@@ -165,9 +176,10 @@ export default function Configuracoes() {
 
   /* ── Auto-save ── */
   useEffect(() => {
+    if (!loaded) return;
     const updated: ConfigData = { ...configData, empresa };
     setConfigData(updated);
-    saveToStorage(updated);
+    saveModuleData(MODULO_NAME, "empresa", updated);
   }, [empresa]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Month selector ── */
@@ -260,7 +272,7 @@ export default function Configuracoes() {
   const handleSaveParametros = useCallback(() => {
     const updated: ConfigData = { ...configData, empresa };
     setConfigData(updated);
-    saveToStorage(updated);
+    saveModuleData(MODULO_NAME, "empresa", updated);
     setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 3000);
   }, [configData, empresa]);
@@ -276,7 +288,7 @@ export default function Configuracoes() {
       arquivos: configData.arquivos.filter((a) => a.id !== deleteModal.arquivo!.id),
     };
     setConfigData(updated);
-    saveToStorage(updated);
+    saveModuleData(MODULO_NAME, "empresa", updated);
     setDeleteModal({ show: false, arquivo: null });
   }, [configData, deleteModal]);
 
@@ -287,7 +299,7 @@ export default function Configuracoes() {
       arquivos: configData.arquivos.filter((a) => !orfaoIds.has(a.id)),
     };
     setConfigData(updated);
-    saveToStorage(updated);
+    saveModuleData(MODULO_NAME, "empresa", updated);
   }, [configData, arquivosOrfaos]);
 
   const handleDownload = useCallback((arquivo: ArquivoSistema) => {

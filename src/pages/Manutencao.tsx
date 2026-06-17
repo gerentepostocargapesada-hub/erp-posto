@@ -19,6 +19,7 @@ import {
   Settings,
   BarChart3,
 } from "lucide-react";
+import { loadAllModuleData, saveAllModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 /* TYPES */
 
@@ -83,6 +84,7 @@ interface PeriodData {
 /* CONSTANTS */
 
 const STORAGE_KEY = "dadosManutencao";
+const MODULO_NAME = MODULE_NAMES.MANUTENCAO;
 
 const MONTH_LABELS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -169,8 +171,8 @@ function loadFromStorage(): Record<string, PeriodData> {
   } catch { return {}; }
 }
 
-function saveToStorage(data: Record<string, PeriodData>): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+function saveToStorage(_data: Record<string, PeriodData>): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 /* REUSABLE */
@@ -198,18 +200,35 @@ export default function Manutencao() {
   const monthSelectorRef = useRef<HTMLDivElement>(null);
 
   // Persistence
-  const allDataRef = useRef<Record<string, PeriodData>>(loadFromStorage());
+  const allDataRef = useRef<Record<string, PeriodData>>({});
+  const [loaded, setLoaded] = useState(false);
   const currentKey = makeKey(selectedYear, selectedMonth);
 
-  // Form States
+  // Form States (initialized with defaults, updated after load)
   const defaults = getDefaultPeriodData();
-  const initStored = allDataRef.current[currentKey] || defaults;
 
-  const [bombas, setBombas] = useState<Bomba[]>(initStored.bombas);
-  const [manutencoes, setManutencoes] = useState<Manutencao[]>(initStored.manutencoes);
-  const [gerador, setGerador] = useState<Gerador[]>(initStored.gerador);
-  const [limpeza, setLimpeza] = useState<Limpeza[]>(initStored.limpeza);
-  const [tetoOrcamentario, setTetoOrcamentario] = useState(initStored.tetoOrcamentario);
+  const [bombas, setBombas] = useState<Bomba[]>(defaults.bombas);
+  const [manutencoes, setManutencoes] = useState<Manutencao[]>(defaults.manutencoes);
+  const [gerador, setGerador] = useState<Gerador[]>(defaults.gerador);
+  const [limpeza, setLimpeza] = useState<Limpeza[]>(defaults.limpeza);
+  const [tetoOrcamentario, setTetoOrcamentario] = useState(defaults.tetoOrcamentario);
+
+  // Carregar dados do Supabase ao montar
+  useEffect(() => {
+    loadAllModuleData<PeriodData>(MODULO_NAME).then((data) => {
+      allDataRef.current = data;
+      setLoaded(true);
+      const initStored = data[currentKey] || getDefaultPeriodData();
+      setBombas(initStored.bombas);
+      setManutencoes(initStored.manutencoes);
+      setGerador(initStored.gerador);
+      setLimpeza(initStored.limpeza);
+      setTetoOrcamentario(initStored.tetoOrcamentario);
+    }).catch(() => {
+      allDataRef.current = loadFromStorage();
+      setLoaded(true);
+    });
+  }, []);
 
   // UI State
   const [expandedBomba, setExpandedBomba] = useState<string | null>(null);
@@ -221,19 +240,20 @@ export default function Manutencao() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterEquipamento, setFilterEquipamento] = useState("");
 
-  // Auto-save
+  // Auto-save via Supabase
   useEffect(() => {
+    if (!loaded) return;
     const data: PeriodData = { bombas, manutencoes, gerador, limpeza, tetoOrcamentario };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
-  }, [bombas, manutencoes, gerador, limpeza, tetoOrcamentario, currentKey]);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
+  }, [bombas, manutencoes, gerador, limpeza, tetoOrcamentario, currentKey, loaded]);
 
   const monthLabel = `${MONTH_LABELS[selectedMonth]} ${selectedYear}`;
 
   const snapshotCurrent = useCallback(() => {
     const data: PeriodData = { bombas, manutencoes, gerador, limpeza, tetoOrcamentario };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
   }, [bombas, manutencoes, gerador, limpeza, tetoOrcamentario, currentKey]);
 
   const loadPeriod = useCallback((key: string) => {

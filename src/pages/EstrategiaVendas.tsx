@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   FileText,
 } from "lucide-react";
+import { loadAllModuleData, saveAllModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 /* ══════════════════════════════════════════════════════════
    TYPES
@@ -72,6 +73,7 @@ interface PeriodData {
    ══════════════════════════════════════════════════════════ */
 
 const STORAGE_KEY = "dadosEstrategia";
+const MODULO_NAME = MODULE_NAMES.ESTRATEGIA;
 
 const MONTH_LABELS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -156,12 +158,8 @@ function loadFromStorage(): Record<string, PeriodData> {
   }
 }
 
-function saveToStorage(data: Record<string, PeriodData>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Storage full or unavailable
-  }
+function saveToStorage(_data: Record<string, PeriodData>): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 function calcDeltaHtml(currVal: string, prevVal: string | undefined): React.ReactNode {
@@ -242,29 +240,38 @@ export default function EstrategiaVendas() {
   const compareSelectorRef = useRef<HTMLDivElement>(null);
 
   // ── Persistence ──
-  const allDataRef = useRef<Record<string, PeriodData>>(loadFromStorage());
+  const allDataRef = useRef<Record<string, PeriodData>>({});
+  const [loaded, setLoaded] = useState(false);
   const currentKey = makeKey(selectedYear, selectedMonth);
 
-  // ── Form State (lazy-init from localStorage) ──
-  const initStored = allDataRef.current[makeKey(2026, 0)];
+  // ── Form State (initialized with defaults) ──
   const defaults = getDefaultPeriodData();
+  const [kpis, setKpis] = useState<KpiItem[]>(defaults.kpis);
+  const [funil, setFunil] = useState<FunilData>(defaults.funil);
+  const [estrategias, setEstrategias] = useState<Estrategia[]>(defaults.estrategias);
 
-  const [kpis, setKpis] = useState<KpiItem[]>(
-    initStored?.kpis || defaults.kpis
-  );
-  const [funil, setFunil] = useState<FunilData>(
-    initStored?.funil || defaults.funil
-  );
-  const [estrategias, setEstrategias] = useState<Estrategia[]>(
-    initStored?.estrategias || defaults.estrategias
-  );
+  // Carregar dados do Supabase ao montar
+  useEffect(() => {
+    loadAllModuleData<PeriodData>(MODULO_NAME).then((data) => {
+      allDataRef.current = data;
+      setLoaded(true);
+      const initStored = data[currentKey] || getDefaultPeriodData();
+      setKpis(initStored.kpis || defaults.kpis);
+      setFunil(initStored.funil || defaults.funil);
+      setEstrategias(initStored.estrategias || defaults.estrategias);
+    }).catch(() => {
+      allDataRef.current = loadFromStorage();
+      setLoaded(true);
+    });
+  }, []);
 
   // ── Auto-save ──
   useEffect(() => {
+    if (!loaded) return;
     const data: PeriodData = { kpis, funil, estrategias };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
-  }, [kpis, funil, estrategias, currentKey]);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
+  }, [kpis, funil, estrategias, currentKey, loaded]);
 
   // ── Month selector data ──
   const months = useMemo(() => {
@@ -281,7 +288,7 @@ export default function EstrategiaVendas() {
   const snapshotCurrent = useCallback(() => {
     const data: PeriodData = { kpis, funil, estrategias };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
   }, [kpis, funil, estrategias, currentKey]);
 
   const loadPeriod = useCallback((key: string) => {

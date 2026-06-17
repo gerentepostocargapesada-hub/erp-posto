@@ -17,6 +17,7 @@ import {
   Gauge,
   ClipboardList,
 } from "lucide-react";
+import { loadAllModuleData, saveAllModuleData, MODULE_NAMES } from "../services/supabasePersistence";
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -75,6 +76,7 @@ interface PeriodData {
    ══════════════════════════════════════════════════════════════ */
 
 const STORAGE_KEY = "dadosLubrificacao";
+const MODULO_NAME = MODULE_NAMES.LUBRIFICACAO;
 
 const MONTH_LABELS = [
   "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -166,10 +168,8 @@ function loadFromStorage(): Record<string, PeriodData> {
   }
 }
 
-function saveToStorage(data: Record<string, PeriodData>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {}
+function saveToStorage(_data: Record<string, PeriodData>): void {
+  /* salvar via Supabase — ver persistência no componente */
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -211,14 +211,28 @@ export default function TrocaOleoLubrificacao() {
   const monthSelectorRef = useRef<HTMLDivElement>(null);
 
   /* ── Persistence ── */
-  const allDataRef = useRef<Record<string, PeriodData>>(loadFromStorage());
+  const allDataRef = useRef<Record<string, PeriodData>>({});
+  const [loaded, setLoaded] = useState(false);
   const currentKey = makeKey(selectedYear, selectedMonth);
 
   const defaults = getDefaultPeriodData();
-  const initStored = allDataRef.current[currentKey] || defaults;
 
-  const [tambores, setTambores] = useState<Tambor[]>(initStored.tambores);
-  const [servicos, setServicos] = useState<Servico[]>(initStored.servicos);
+  const [tambores, setTambores] = useState<Tambor[]>(defaults.tambores);
+  const [servicos, setServicos] = useState<Servico[]>(defaults.servicos);
+
+  /* Carregar dados do Supabase ao montar */
+  useEffect(() => {
+    loadAllModuleData<PeriodData>(MODULO_NAME).then((data) => {
+      allDataRef.current = data;
+      setLoaded(true);
+      const initStored = data[currentKey] || getDefaultPeriodData();
+      setTambores(initStored.tambores);
+      setServicos(initStored.servicos);
+    }).catch(() => {
+      allDataRef.current = loadFromStorage();
+      setLoaded(true);
+    });
+  }, []);
 
   /* ── UI State ── */
   const [showServicoForm, setShowServicoForm] = useState(false);
@@ -226,17 +240,18 @@ export default function TrocaOleoLubrificacao() {
 
   /* ── Auto-save ── */
   useEffect(() => {
+    if (!loaded) return;
     const data: PeriodData = { tambores, servicos };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
-  }, [tambores, servicos, currentKey]);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
+  }, [tambores, servicos, currentKey, loaded]);
 
   const monthLabel = `${MONTH_LABELS[selectedMonth]} ${selectedYear}`;
 
   const snapshotCurrent = useCallback(() => {
     const data: PeriodData = { tambores, servicos };
     allDataRef.current[currentKey] = data;
-    saveToStorage(allDataRef.current);
+    saveAllModuleData(MODULO_NAME, allDataRef.current);
   }, [tambores, servicos, currentKey]);
 
   const loadPeriod = useCallback((key: string) => {
