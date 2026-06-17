@@ -51,7 +51,8 @@ export async function loadModuleData<T>(
 
     if (error || !data) return null;
     return data.data as T;
-  } catch {
+  } catch (err) {
+    console.error(`[Supabase] loadModuleData error for "${moduleName}":`, err);
     // Fallback: tentar carregar do localStorage
     try {
       const raw = localStorage.getItem(`${moduleName}_${periodKey}`);
@@ -85,7 +86,8 @@ export async function loadAllModuleData<T>(
       result[row.period_key] = row.data as T;
     }
     return result;
-  } catch {
+  } catch (err) {
+    console.error(`[Supabase] loadAllModuleData error for "${moduleName}":`, err);
     return loadAllFromLocalStorage<T>(moduleName);
   }
 }
@@ -121,7 +123,8 @@ export async function saveModuleData<T>(
     } catch {
       /* silent */
     }
-  } catch {
+  } catch (err) {
+    console.error(`[Supabase] saveModuleData error for "${moduleName}" [${periodKey}]:`, err);
     // Fallback: salvar apenas no localStorage
     try {
       localStorage.setItem(
@@ -173,7 +176,8 @@ export async function saveAllModuleData<T>(
     } catch {
       /* silent */
     }
-  } catch {
+  } catch (err) {
+    console.error(`[Supabase] saveAllModuleData error for "${moduleName}":`, err);
     // Fallback: salvar apenas no localStorage
     try {
       localStorage.setItem(`fuelops_${moduleName}`, JSON.stringify(allData));
@@ -202,7 +206,8 @@ export async function loadSimpleData<T>(
 
     if (error || !data) return defaultValue;
     return data.data as T;
-  } catch {
+  } catch (err) {
+    console.error(`[Supabase] loadSimpleData error for "${moduleName}" [${periodKey}]:`, err);
     return defaultValue;
   }
 }

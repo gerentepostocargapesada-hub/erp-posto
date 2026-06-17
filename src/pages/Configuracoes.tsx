@@ -181,6 +181,10 @@ export default function Configuracoes() {
     setConfigData(updated);
     saveModuleData(MODULO_NAME, "empresa", updated);
   }, [empresa]); // eslint-disable-line react-hooks/exhaustive-deps
+  // NOTA: configData é intencionalmente excluído das deps.
+  // O effect é re-criado a cada mudança de empresa com closure atualizado.
+  // Handlers (handleSaveParametros, handleConfirmDeleteArquivo, handleLimparOrfaos)
+  // salvam diretamente via saveModuleData.
 
   /* ── Month selector ── */
   const monthLabel = `${MONTH_LABELS[selectedMonth]} ${selectedYear}`;

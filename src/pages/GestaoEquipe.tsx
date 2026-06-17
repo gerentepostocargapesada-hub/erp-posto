@@ -771,7 +771,7 @@ export default function GestaoEquipe() {
   const monthsWithData = useMemo(() => {
     const set = new Set(Object.keys(allDataRef.current));
     return set;
-  }, []);
+  }, [loaded, renderKey]);
 
   // ── File Upload ──
   const handleFile = useCallback(
@@ -783,6 +783,7 @@ export default function GestaoEquipe() {
         const key = makeKey(year, month);
         allDataRef.current[key] = data;
         saveAllModuleData(MODULO_NAME, allDataRef.current);
+        setRenderKey((k) => k + 1);
         // Navigate to the imported month
         setSelectedMonth(month);
         setSelectedYear(year);
@@ -1124,6 +1125,7 @@ export default function GestaoEquipe() {
                   delete allDataRef.current[currentKey];
                   saveAllModuleData(MODULO_NAME, allDataRef.current);
                   // Force re-render
+                  setRenderKey((k) => k + 1);
                   setSelectedMonth((p) => p);
                 }
               }}
